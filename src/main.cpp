@@ -28,10 +28,15 @@ namespace PapyrusVR
 	bool isLoaded = false;
 	bool isBlocking = false;
 	bool isLeftHanded = false;
+	bool isLastUpdateValid = false;
 
 	const int numPrevSpeeds = 5; // length of previous kept speeds
 	float leftSpeeds[numPrevSpeeds]; // previous n speeds
 	float rightSpeeds[numPrevSpeeds]; // previous n speeds
+
+	const int blockCooldown = 10; // number of updates to ignore block start / stop
+	int lastBlockStartFrameCount = 0; // number of updates we should still wait before attempting to start blocking
+	int lastBlockStopFrameCount = 0; // number of updates we should still wait before attempting to stop blocking
 
 	extern "C" {
 
@@ -95,9 +100,28 @@ namespace PapyrusVR
 			return 0;
 		}
 
+		bool IsDualWielding(TESForm *mainHandItem, TESForm *offHandItem)
+		{
+			// must have 2 actual items equipped
+			if (!mainHandItem || !offHandItem) return false;
+
+			// main hand has to be a weapon, offhand can be weapon or spell
+			if (!mainHandItem->IsWeapon() || !(offHandItem->IsWeapon() || offHandItem->formType == kFormType_Spell)) return false;
+
+			return true;
+		}
+
 		// Called on each update (about 90-100 calls per second)
+
 		void OnPoseUpdate(float DeltaTime)
 		{
+			bool wasLastUpdateValid = isLastUpdateValid;
+			isLastUpdateValid = false;
+			if (lastBlockStartFrameCount > 0)
+				lastBlockStartFrameCount--;
+			if (lastBlockStopFrameCount > 0)
+				lastBlockStopFrameCount--;
+
 			if (!isLoaded || !g_thePlayer) return;
 
 			PlayerCharacter *pc = *g_thePlayer;
@@ -105,8 +129,15 @@ namespace PapyrusVR
 
 			TESForm *mainHandItem = GetMainHandObject(pc);
 			TESForm *offHandItem = GetOffHandObject(pc);
-			if (!mainHandItem || !offHandItem) return; // must have 2 actual items equipped
-			if (!mainHandItem->IsWeapon() || !(offHandItem->IsWeapon() || offHandItem->formType == kFormType_Spell)) return; // main hand has to be a weapon, offhand can be weapon or spell
+			if(!IsDualWielding(mainHandItem, offHandItem)) {
+				// If we switched weapons away from dual wielding, cancel existing block state
+				if (wasLastUpdateValid) {
+					CSkyrimConsole::RunCommand("player.sendanimevent blockStop");
+					_MESSAGE("Stop block");
+					isBlocking = false;
+				}
+				return;
+			}
 
 			TrackedDevicePose *hmdPose = g_papyrusvrManager->GetHMDPose();
 			TrackedDevicePose *mainHandPose = isLeftHanded ? g_papyrusvrManager->GetLeftHandPose() : g_papyrusvrManager->GetRightHandPose();
@@ -121,17 +152,24 @@ namespace PapyrusVR
 			}
 
 			if (mainHandBlockStatus == 2 || offHandBlockStatus == 2) { // Either hand is in blocking position
-				// Call console to start blocking
-				CSkyrimConsole::RunCommand("player.sendanimevent blockStart");
-				_MESSAGE("Start block");
-				isBlocking = true;
+				if (lastBlockStartFrameCount <= 0) { // Do not try to block more than once every n updates
+					// Call console to start blocking
+					CSkyrimConsole::RunCommand("player.sendanimevent blockStart");
+					_MESSAGE("Start block");
+					isBlocking = true;
+					lastBlockStartFrameCount = blockCooldown;
+				}
 			}
 			else if (mainHandBlockStatus == 1 && (!offHandItem->IsWeapon() || offHandBlockStatus == 1)) { // Either both hands are not blocking, or just main hand and offhand is not a weapon
-				// Call console to stop blocking
-				CSkyrimConsole::RunCommand("player.sendanimevent blockStop");
-				_MESSAGE("Stop block");
-				isBlocking = false;
+				if (lastBlockStopFrameCount <= 0) { // Do not try to block more than once every n updates
+					// Call console to stop blocking
+					CSkyrimConsole::RunCommand("player.sendanimevent blockStop");
+					_MESSAGE("Stop block");
+					isBlocking = false;
+					lastBlockStopFrameCount = blockCooldown;
+				}
 			}
+			isLastUpdateValid = true;
 		}
 
 		// Listener for PapyrusVR Messages
