@@ -4,6 +4,8 @@ This is a Skyrim VR mod / SKSE VR plugin which combine to let the player block w
 
 This is done by basically re-checking the conditions the game normally checks to block without dual wielding.
 
+[Get the mod here](https://www.nexusmods.com/skyrimspecialedition/mods/28456)
+
 ## Requires
 Skyrim VR, SKSE VR, and SkyrimVRTools
 
