@@ -69,5 +69,8 @@
     <ClInclude Include="src\MathUtils.h">
       <Filter>src</Filter>
     </ClInclude>
+    <ClInclude Include="include\main.h">
+      <Filter>include</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

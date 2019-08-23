@@ -1,10 +1,11 @@
 ﻿#include "common/IDebugLog.h"  // IDebugLog
 #include "skse64_common/skse_version.h"  // RUNTIME_VERSION
 #include "skse64/PluginAPI.h"  // SKSEInterface, PluginInfo
-#include "skse64/GameAPI.h"
+#include "skse64/GameRTTI.h"
 
 #include <ShlObj.h>  // CSIDL_MYDOCUMENTS
 
+#include "main.h"
 #include "version.h"  // VERSION_VERSTRING, VERSION_MAJOR
 #include "console.h"
 #include "MathUtils.h"
@@ -15,15 +16,18 @@
 #include "api/utils/OpenVRUtils.h"
 
 
+RelocAddr<_GetAnimationVariableBool> GetAnimationVariableBool(0x009CE880);
+
 namespace PapyrusVR
 {
 
 	static PluginHandle	g_pluginHandle = kPluginHandle_Invalid;
 	static SKSEMessagingInterface *g_messaging = nullptr;
-	static SKSEPapyrusInterface *g_papyrus = nullptr;
 
 	PapyrusVRAPI *g_papyrusvr;
 	PapyrusVR::VRManagerAPI *g_papyrusvrManager;
+
+	TESObjectREFR *playerRef;
 
 	bool isLoaded = false;
 	bool isBlocking = false;
@@ -39,12 +43,6 @@ namespace PapyrusVR
 	int lastBlockStopFrameCount = 0; // number of updates we should still wait before attempting to stop blocking
 
 	extern "C" {
-
-		// Papyrus function to periodically set whether we are actually blocking (can't get anim variables using skse)
-		void SetIsBlockingDualWield(StaticFunctionTag *base, bool block)
-		{
-			isBlocking = block;
-		}
 
 		TESForm * GetMainHandObject(Actor *actor)
 		{
@@ -112,7 +110,6 @@ namespace PapyrusVR
 		}
 
 		// Called on each update (about 90-100 calls per second)
-
 		void OnPoseUpdate(float DeltaTime)
 		{
 			bool wasLastUpdateValid = isLastUpdateValid;
@@ -134,7 +131,6 @@ namespace PapyrusVR
 				if (wasLastUpdateValid) {
 					CSkyrimConsole::RunCommand("player.sendanimevent blockStop");
 					_MESSAGE("Stop block");
-					isBlocking = false;
 				}
 				return;
 			}
@@ -151,12 +147,14 @@ namespace PapyrusVR
 				offHandBlockStatus = GetHandBlockingStatus(hmdPose, offHandPose, leftSpeeds);
 			}
 
+			// Check if the player is blocking
+			isBlocking = GetAnimationVariableBool((*g_skyrimVM)->GetClassRegistry(), 0, playerRef, &BSFixedString("IsBlocking"));
+
 			if (mainHandBlockStatus == 2 || offHandBlockStatus == 2) { // Either hand is in blocking position
 				if (lastBlockStartFrameCount <= 0) { // Do not try to block more than once every n updates
 					// Call console to start blocking
 					CSkyrimConsole::RunCommand("player.sendanimevent blockStart");
 					_MESSAGE("Start block");
-					isBlocking = true;
 					lastBlockStartFrameCount = blockCooldown;
 				}
 			}
@@ -165,7 +163,6 @@ namespace PapyrusVR
 					// Call console to stop blocking
 					CSkyrimConsole::RunCommand("player.sendanimevent blockStop");
 					_MESSAGE("Stop block");
-					isBlocking = false;
 					lastBlockStopFrameCount = blockCooldown;
 				}
 			}
@@ -208,6 +205,7 @@ namespace PapyrusVR
 					isLoaded = true;
 					Setting	* isLeftHandedSetting = GetINISetting("bLeftHandedMode:VRInput");
 					isLeftHanded = (bool)isLeftHandedSetting->data.u8;
+					playerRef = DYNAMIC_CAST(LookupFormByID(0x14), TESForm, TESObjectREFR);
 				}
 			}
 		}
@@ -238,19 +236,6 @@ namespace PapyrusVR
 			return true;
 		}
 
-		bool RegisterFuncs(VMClassRegistry* registry)
-		{
-			_MESSAGE("Registering functions");
-			registry->RegisterFunction(
-				new NativeFunction1<StaticFunctionTag, void, bool>(
-					"SetIsBlockingDualWield",
-					"DualWieldBlockVR",
-					SetIsBlockingDualWield,
-					registry)
-			);
-			return true;
-		}
-
 		bool SKSEPlugin_Load(const SKSEInterface * skse)
 		{	// Called by SKSE to load this plugin
 			_MESSAGE("DualWieldBlockVR loaded");
@@ -259,9 +244,6 @@ namespace PapyrusVR
 			_MESSAGE("Registering for SKSE messages");
 			g_messaging = (SKSEMessagingInterface*)skse->QueryInterface(kInterface_Messaging);
 			g_messaging->RegisterListener(g_pluginHandle, "SKSE", OnSKSEMessage);
-
-			g_papyrus = (SKSEPapyrusInterface *)skse->QueryInterface(kInterface_Papyrus);
-			g_papyrus->Register(RegisterFuncs);
 
 			for (int i = 0; i < numPrevSpeeds; i++) {
 				leftSpeeds[i] = 0;

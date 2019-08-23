@@ -166,6 +166,7 @@
     <ClCompile Include="src\MathUtils.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="include\main.h" />
     <ClInclude Include="include\version.h" />
     <ClInclude Include="resource.h" />
     <ClInclude Include="src\api\openvr.h" />
