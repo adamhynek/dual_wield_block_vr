@@ -30,9 +30,6 @@
     <ClCompile Include="src\api\utils\OpenVRUtils.cpp">
       <Filter>src\api\utils</Filter>
     </ClCompile>
-    <ClCompile Include="src\console.cpp">
-      <Filter>src</Filter>
-    </ClCompile>
     <ClCompile Include="src\MathUtils.cpp">
       <Filter>src</Filter>
     </ClCompile>
@@ -62,9 +59,6 @@
     </ClInclude>
     <ClInclude Include="src\api\openvr.h">
       <Filter>src\api</Filter>
-    </ClInclude>
-    <ClInclude Include="src\console.h">
-      <Filter>src</Filter>
     </ClInclude>
     <ClInclude Include="src\MathUtils.h">
       <Filter>src</Filter>

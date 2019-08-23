@@ -6,4 +6,7 @@
 
 
 typedef bool(*_GetAnimationVariableBool)(VMClassRegistry* registry, UInt32 stackId, TESObjectREFR* obj, BSFixedString *asVariableName);
-extern RelocAddr<_GetAnimationVariableBool> GetAnimationVariableBool;
+RelocAddr<_GetAnimationVariableBool> GetAnimationVariableBool(0x009CE880);
+
+typedef void(*_DebugSendAnimationEvent)(VMClassRegistry* registry, UInt32 stackId, void* unk1, TESObjectREFR* objectRefr, BSFixedString const &animEvent);
+RelocAddr<_DebugSendAnimationEvent> DebugSendAnimationEvent(0x009A7F40);

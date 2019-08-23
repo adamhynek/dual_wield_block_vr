@@ -2,12 +2,12 @@
 #include "skse64_common/skse_version.h"  // RUNTIME_VERSION
 #include "skse64/PluginAPI.h"  // SKSEInterface, PluginInfo
 #include "skse64/GameRTTI.h"
+#include "skse64/GameSettings.h"
 
 #include <ShlObj.h>  // CSIDL_MYDOCUMENTS
 
 #include "main.h"
 #include "version.h"  // VERSION_VERSTRING, VERSION_MAJOR
-#include "console.h"
 #include "MathUtils.h"
 
 // Headers under api/ folder
@@ -15,8 +15,6 @@
 #include "api/VRManagerAPI.h"
 #include "api/utils/OpenVRUtils.h"
 
-
-RelocAddr<_GetAnimationVariableBool> GetAnimationVariableBool(0x009CE880);
 
 namespace PapyrusVR
 {
@@ -28,6 +26,7 @@ namespace PapyrusVR
 	PapyrusVR::VRManagerAPI *g_papyrusvrManager;
 
 	TESObjectREFR *playerRef;
+	VMClassRegistry *vmRegistry;
 
 	bool isLoaded = false;
 	bool isBlocking = false;
@@ -129,7 +128,7 @@ namespace PapyrusVR
 			if(!IsDualWielding(mainHandItem, offHandItem)) {
 				// If we switched weapons away from dual wielding, cancel existing block state
 				if (wasLastUpdateValid) {
-					CSkyrimConsole::RunCommand("player.sendanimevent blockStop");
+					DebugSendAnimationEvent(vmRegistry, 0, nullptr, playerRef, BSFixedString("blockStop"));
 					_MESSAGE("Stop block");
 				}
 				return;
@@ -148,20 +147,20 @@ namespace PapyrusVR
 			}
 
 			// Check if the player is blocking
-			isBlocking = GetAnimationVariableBool((*g_skyrimVM)->GetClassRegistry(), 0, playerRef, &BSFixedString("IsBlocking"));
+			isBlocking = GetAnimationVariableBool(vmRegistry, 0, playerRef, &BSFixedString("IsBlocking"));
 
 			if (mainHandBlockStatus == 2 || offHandBlockStatus == 2) { // Either hand is in blocking position
 				if (lastBlockStartFrameCount <= 0) { // Do not try to block more than once every n updates
-					// Call console to start blocking
-					CSkyrimConsole::RunCommand("player.sendanimevent blockStart");
+					// Start blocking
+					DebugSendAnimationEvent(vmRegistry, 0, nullptr, playerRef, BSFixedString("blockStart"));
 					_MESSAGE("Start block");
 					lastBlockStartFrameCount = blockCooldown;
 				}
 			}
 			else if (mainHandBlockStatus == 1 && (!offHandItem->IsWeapon() || offHandBlockStatus == 1)) { // Either both hands are not blocking, or just main hand and offhand is not a weapon
 				if (lastBlockStopFrameCount <= 0) { // Do not try to block more than once every n updates
-					// Call console to stop blocking
-					CSkyrimConsole::RunCommand("player.sendanimevent blockStop");
+					// Stop blocking
+					DebugSendAnimationEvent(vmRegistry, 0, nullptr, playerRef, BSFixedString("blockStop"));
 					_MESSAGE("Stop block");
 					lastBlockStopFrameCount = blockCooldown;
 				}
@@ -206,6 +205,7 @@ namespace PapyrusVR
 					Setting	* isLeftHandedSetting = GetINISetting("bLeftHandedMode:VRInput");
 					isLeftHanded = (bool)isLeftHandedSetting->data.u8;
 					playerRef = DYNAMIC_CAST(LookupFormByID(0x14), TESForm, TESObjectREFR);
+					vmRegistry = (*g_skyrimVM)->GetClassRegistry();
 				}
 			}
 		}

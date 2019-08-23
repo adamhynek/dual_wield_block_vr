@@ -161,7 +161,6 @@
   <ItemGroup>
     <ClCompile Include="src\api\PapyrusVRTypes.cpp" />
     <ClCompile Include="src\api\utils\OpenVRUtils.cpp" />
-    <ClCompile Include="src\console.cpp" />
     <ClCompile Include="src\main.cpp" />
     <ClCompile Include="src\MathUtils.cpp" />
   </ItemGroup>
@@ -176,7 +175,6 @@
     <ClInclude Include="src\api\utils\OpenVRUtils.h" />
     <ClInclude Include="src\api\VRHookAPI.h" />
     <ClInclude Include="src\api\VRManagerAPI.h" />
-    <ClInclude Include="src\console.h" />
     <ClInclude Include="src\MathUtils.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
