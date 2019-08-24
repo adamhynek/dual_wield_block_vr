@@ -161,10 +161,12 @@
   <ItemGroup>
     <ClCompile Include="src\api\PapyrusVRTypes.cpp" />
     <ClCompile Include="src\api\utils\OpenVRUtils.cpp" />
+    <ClCompile Include="src\config.cpp" />
     <ClCompile Include="src\main.cpp" />
     <ClCompile Include="src\MathUtils.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="include\config.h" />
     <ClInclude Include="include\main.h" />
     <ClInclude Include="include\version.h" />
     <ClInclude Include="resource.h" />

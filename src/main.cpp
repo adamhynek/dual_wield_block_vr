@@ -8,6 +8,7 @@
 
 #include "main.h"
 #include "version.h"  // VERSION_VERSTRING, VERSION_MAJOR
+#include "config.h"
 #include "MathUtils.h"
 
 // Headers under api/ folder
@@ -28,6 +29,16 @@ namespace PapyrusVR
 	TESObjectREFR *playerRef;
 	VMClassRegistry *vmRegistry;
 
+	// Config parameters for blocking conditions
+	float maxSpeedEnter = 0.02;
+	float maxSpeedExit = 0.06;
+	float handForwardHmdUpEnter = -0.5;
+	float handForwardHmdUpExit = -0.5;
+	float handForwardHmdForwardEnter = 0.4;
+	float handForwardHmdForwardExit = 0.6;
+	float hmdToHandDistanceUpEnter = 0.35;
+	float hmdToHandDistanceUpExit = 0.35;
+
 	bool isLoaded = false;
 	bool isBlocking = false;
 	bool isLeftHanded = false;
@@ -37,7 +48,7 @@ namespace PapyrusVR
 	float leftSpeeds[numPrevSpeeds]; // previous n speeds
 	float rightSpeeds[numPrevSpeeds]; // previous n speeds
 
-	const int blockCooldown = 10; // number of updates to ignore block start / stop
+	const int blockCooldown = 20; // number of updates to ignore block start / stop
 	int lastBlockStartFrameCount = 0; // number of updates we should still wait before attempting to start blocking
 	int lastBlockStopFrameCount = 0; // number of updates we should still wait before attempting to stop blocking
 
@@ -82,13 +93,21 @@ namespace PapyrusVR
 			}
 			speeds[0] = speed;
 
-			if (maxSpeed <= 0.02 && handForwardDotWithHmdUp >= -0.5 && abs(handForwardDotWithHmdForward) <= 0.4 && abs(hmdToHandVerticalDistance) <= 0.35) {
+			if (maxSpeed <= maxSpeedEnter &&
+				handForwardDotWithHmdUp >= handForwardHmdUpEnter &&
+				abs(handForwardDotWithHmdForward) <= handForwardHmdForwardEnter &&
+				abs(hmdToHandVerticalDistance) <= hmdToHandDistanceUpEnter) {
+
 				if (!isBlocking) {
 					// Start blocking
 					return 2;
 				}
 			}
-			else if (maxSpeed > 0.06 || handForwardDotWithHmdUp < -0.5 || abs(handForwardDotWithHmdForward) > 0.6 || abs(hmdToHandVerticalDistance) > 0.35) {
+			else if (maxSpeed > maxSpeedExit ||
+				handForwardDotWithHmdUp < handForwardHmdUpExit ||
+				abs(handForwardDotWithHmdForward) > handForwardHmdForwardExit ||
+				abs(hmdToHandVerticalDistance) > hmdToHandDistanceUpExit) {
+
 				if (isBlocking) {
 					// Stop blocking
 					return 1;
@@ -236,6 +255,22 @@ namespace PapyrusVR
 			return true;
 		}
 
+		bool ReadConfigOptions()
+		{
+			if (!DualWieldBlockVR::GetConfigOptionFloat("Setting", "MaxSpeedEnter", &maxSpeedEnter)) return false;
+			if (!DualWieldBlockVR::GetConfigOptionFloat("Setting", "MaxSpeedExit", &maxSpeedExit)) return false;
+
+			if (!DualWieldBlockVR::GetConfigOptionFloat("Setting", "HandForwardDotWithHmdDownEnter", &handForwardHmdUpEnter)) return false;
+			if (!DualWieldBlockVR::GetConfigOptionFloat("Setting", "HandForwardDotWithHmdDownExit", &handForwardHmdUpExit)) return false;
+
+			if (!DualWieldBlockVR::GetConfigOptionFloat("Setting", "HandForwardDotWithHmdForwardEnter", &handForwardHmdForwardEnter)) return false;
+			if (!DualWieldBlockVR::GetConfigOptionFloat("Setting", "HandForwardDotWithHmdForwardExit", &handForwardHmdForwardExit)) return false;
+
+			if (!DualWieldBlockVR::GetConfigOptionFloat("Setting", "HmdToHandVerticalDistanceEnter", &hmdToHandDistanceUpEnter)) return false;
+			if (!DualWieldBlockVR::GetConfigOptionFloat("Setting", "HmdToHandVerticalDistanceExit", &hmdToHandDistanceUpExit)) return false;
+			return true;
+		}
+
 		bool SKSEPlugin_Load(const SKSEInterface * skse)
 		{	// Called by SKSE to load this plugin
 			_MESSAGE("DualWieldBlockVR loaded");
@@ -244,6 +279,13 @@ namespace PapyrusVR
 			_MESSAGE("Registering for SKSE messages");
 			g_messaging = (SKSEMessagingInterface*)skse->QueryInterface(kInterface_Messaging);
 			g_messaging->RegisterListener(g_pluginHandle, "SKSE", OnSKSEMessage);
+
+			if (ReadConfigOptions()) {
+				_MESSAGE("Successfully read config parameters");
+			}
+			else {
+				_WARNING("[WARNING] Failed to read config options. Using defaults instead.");
+			}
 
 			for (int i = 0; i < numPrevSpeeds; i++) {
 				leftSpeeds[i] = 0;

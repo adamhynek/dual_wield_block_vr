@@ -8,5 +8,8 @@
 typedef bool(*_GetAnimationVariableBool)(VMClassRegistry* registry, UInt32 stackId, TESObjectREFR* obj, BSFixedString *asVariableName);
 RelocAddr<_GetAnimationVariableBool> GetAnimationVariableBool(0x009CE880);
 
+typedef int(*_GetAnimationVariableInt)(VMClassRegistry* registry, UInt32 stackId, TESObjectREFR* obj, BSFixedString *asVariableName);
+RelocAddr<_GetAnimationVariableInt> GetAnimationVariableInt(0x009CE950);
+
 typedef void(*_DebugSendAnimationEvent)(VMClassRegistry* registry, UInt32 stackId, void* unk1, TESObjectREFR* objectRefr, BSFixedString const &animEvent);
 RelocAddr<_DebugSendAnimationEvent> DebugSendAnimationEvent(0x009A7F40);
