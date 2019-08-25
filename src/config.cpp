@@ -46,4 +46,24 @@ namespace DualWieldBlockVR
 		*out = std::stof(data);
 		return true;
 	}
+
+	bool GetConfigOptionBool(const char *section, const char *key, bool *out)
+	{
+		std::string	data = GetConfigOption(section, key);
+		if (data.empty())
+			return false;
+
+		int val = std::stoi(data);
+		if (val == 1) {
+			*out = true;
+			return true;
+		}
+		else if (val == 0) {
+			*out = false;
+			return true;
+		}
+		else {
+			return false;
+		}
+	}
 }

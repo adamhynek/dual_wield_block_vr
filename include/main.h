@@ -5,11 +5,11 @@
 #include "skse64/GameReferences.h"
 
 
-typedef bool(*_GetAnimationVariableBool)(VMClassRegistry* registry, UInt32 stackId, TESObjectREFR* obj, BSFixedString *asVariableName);
+typedef bool(*_GetAnimationVariableBool)(VMClassRegistry* registry, UInt32 stackId, TESObjectREFR* obj, const BSFixedString &asVariableName);
 RelocAddr<_GetAnimationVariableBool> GetAnimationVariableBool(0x009CE880);
 
-typedef int(*_GetAnimationVariableInt)(VMClassRegistry* registry, UInt32 stackId, TESObjectREFR* obj, BSFixedString *asVariableName);
+typedef int(*_GetAnimationVariableInt)(VMClassRegistry* registry, UInt32 stackId, TESObjectREFR* obj, const BSFixedString &asVariableName);
 RelocAddr<_GetAnimationVariableInt> GetAnimationVariableInt(0x009CE950);
 
-typedef void(*_DebugSendAnimationEvent)(VMClassRegistry* registry, UInt32 stackId, void* unk1, TESObjectREFR* objectRefr, BSFixedString const &animEvent);
+typedef void(*_DebugSendAnimationEvent)(VMClassRegistry* registry, UInt32 stackId, void* unk1, TESObjectREFR* objectRefr, const BSFixedString &animEvent);
 RelocAddr<_DebugSendAnimationEvent> DebugSendAnimationEvent(0x009A7F40);

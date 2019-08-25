@@ -3,6 +3,7 @@
 #include "skse64/PluginAPI.h"  // SKSEInterface, PluginInfo
 #include "skse64/GameRTTI.h"
 #include "skse64/GameSettings.h"
+#include "skse64/GameMenus.h"
 
 #include <ShlObj.h>  // CSIDL_MYDOCUMENTS
 
@@ -38,17 +39,20 @@ namespace PapyrusVR
 	float handForwardHmdForwardExit = 0.6;
 	float hmdToHandDistanceUpEnter = 0.35;
 	float hmdToHandDistanceUpExit = 0.35;
+	bool isShieldEnabled = false;
 
 	bool isLoaded = false;
-	bool isBlocking = false;
 	bool isLeftHanded = false;
 	bool isLastUpdateValid = false;
+
+	const int numPrevIsBlocking = 5; // Should be an odd number
+	bool prevIsBlockings[numPrevIsBlocking];  // previous n IsBlocking animation values
 
 	const int numPrevSpeeds = 5; // length of previous kept speeds
 	float leftSpeeds[numPrevSpeeds]; // previous n speeds
 	float rightSpeeds[numPrevSpeeds]; // previous n speeds
 
-	const int blockCooldown = 20; // number of updates to ignore block start / stop
+	const int blockCooldown = 30; // number of updates to ignore block start / stop
 	int lastBlockStartFrameCount = 0; // number of updates we should still wait before attempting to start blocking
 	int lastBlockStopFrameCount = 0; // number of updates we should still wait before attempting to stop blocking
 
@@ -64,8 +68,44 @@ namespace PapyrusVR
 			return actor->GetEquippedObject(true);
 		}
 
+		bool IsDualWielding(TESForm *mainHandItem, TESForm *offHandItem)
+		{
+			// must have 2 actual items equipped
+			if (!mainHandItem || !offHandItem) return false;
+
+			// main hand has to be a weapon
+			if (!mainHandItem->IsWeapon()) return false;
+
+			// offhand can be weapon or spell, or shield if enabled
+			if (!(offHandItem->IsWeapon() || offHandItem->formType == kFormType_Spell || (isShieldEnabled && offHandItem->formType == kFormType_Armor))) return false;
+
+			return true;
+		}
+
+		// True if _the game_ decided to block, not us (i.e. 1 handed exclusive block, 2 handed block, or shield is blocking
+		bool IsBlockingInternal(Actor *actor)
+		{
+			return (actor->actorState.flags08 >> 8) & 1;
+		}
+
+		// Get the mode of the IsBlocking value over the last few frames. This is needed because when you block a hit, it goes to 0 for 1 frame, then back to 1.
+		bool GetIsBlockingMode()
+		{
+			bool isBlocking = GetAnimationVariableBool(vmRegistry, 0, playerRef, BSFixedString("IsBlocking"));
+
+			int numTrue = (int)isBlocking;
+			int numFalse = (int)(!isBlocking);
+			for (int i = numPrevIsBlocking - 1; i >= 1; i--) {
+				prevIsBlockings[i] = prevIsBlockings[i - 1];
+				if (prevIsBlockings[i]) numTrue++;
+				else numFalse++;
+			}
+			prevIsBlockings[0] = isBlocking;
+			return (numTrue >= numFalse);
+		}
+
 		// Returns 2 if we should start blocking, 1 if we should stop blocking, 0 if no effect
-		int GetHandBlockingStatus(TrackedDevicePose *hmdPose, TrackedDevicePose *handPose, float *speeds)
+		int GetHandBlockingStatus(TrackedDevicePose *hmdPose, TrackedDevicePose *handPose, float *speeds, bool isBlocking)
 		{
 			Quaternion hmdQuat = OpenVRUtils::GetRotation(&(hmdPose->mDeviceToAbsoluteTracking));
 			Vector3 hmdPosition = OpenVRUtils::GetPosition(&(hmdPose->mDeviceToAbsoluteTracking));
@@ -87,7 +127,7 @@ namespace PapyrusVR
 			// Compute max speed over the last few
 			float speed = handPose->vVelocity.lengthSquared();
 			float maxSpeed = speed;
-			for (int i = 1; i < numPrevSpeeds; i++) {
+			for (int i = numPrevSpeeds - 1; i >= 1; i--) {
 				speeds[i] = speeds[i - 1];
 				if (speeds[i] > maxSpeed) maxSpeed = speeds[i];
 			}
@@ -114,17 +154,6 @@ namespace PapyrusVR
 				}
 			}
 			return 0;
-		}
-
-		bool IsDualWielding(TESForm *mainHandItem, TESForm *offHandItem)
-		{
-			// must have 2 actual items equipped
-			if (!mainHandItem || !offHandItem) return false;
-
-			// main hand has to be a weapon, offhand can be weapon or spell
-			if (!mainHandItem->IsWeapon() || !(offHandItem->IsWeapon() || offHandItem->formType == kFormType_Spell)) return false;
-
-			return true;
 		}
 
 		// Called on each update (about 90-100 calls per second)
@@ -158,15 +187,29 @@ namespace PapyrusVR
 			TrackedDevicePose *offHandPose = isLeftHanded ? g_papyrusvrManager->GetRightHandPose() : g_papyrusvrManager->GetLeftHandPose();
 			if (!hmdPose || !hmdPose->bPoseIsValid || !mainHandPose || !mainHandPose->bPoseIsValid || !offHandPose || !offHandPose->bPoseIsValid) return;
 
-			int mainHandBlockStatus = GetHandBlockingStatus(hmdPose, mainHandPose, rightSpeeds);
+			// Check if the player is blocking
+			bool isBlocking = GetIsBlockingMode();
+
+			int mainHandBlockStatus = GetHandBlockingStatus(hmdPose, mainHandPose, rightSpeeds, isBlocking);
 
 			int offHandBlockStatus = 0;
 			if (offHandItem->IsWeapon()) {
-				offHandBlockStatus = GetHandBlockingStatus(hmdPose, offHandPose, leftSpeeds);
+				offHandBlockStatus = GetHandBlockingStatus(hmdPose, offHandPose, leftSpeeds, isBlocking);
 			}
-
-			// Check if the player is blocking
-			isBlocking = GetAnimationVariableBool(vmRegistry, 0, playerRef, &BSFixedString("IsBlocking"));
+			else if (offHandItem->formType == kFormType_Armor) {
+				// Offhand is a shield
+				if (IsBlockingInternal(pc)) {
+					offHandBlockStatus = 0;
+				}
+				else {
+					if (isBlocking) {
+						offHandBlockStatus = 1;
+					}
+				}
+			}
+			else {
+				offHandBlockStatus = 1; // Offhand not being a weapon/shield means it should say to stop blocking
+			}
 
 			if (mainHandBlockStatus == 2 || offHandBlockStatus == 2) { // Either hand is in blocking position
 				if (lastBlockStartFrameCount <= 0) { // Do not try to block more than once every n updates
@@ -176,7 +219,7 @@ namespace PapyrusVR
 					lastBlockStartFrameCount = blockCooldown;
 				}
 			}
-			else if (mainHandBlockStatus == 1 && (!offHandItem->IsWeapon() || offHandBlockStatus == 1)) { // Either both hands are not blocking, or just main hand and offhand is not a weapon
+			else if (mainHandBlockStatus == 1 && offHandBlockStatus == 1) { // Either both hands are not blocking, or just main hand and offhand is not a weapon
 				if (lastBlockStopFrameCount <= 0) { // Do not try to block more than once every n updates
 					// Stop blocking
 					DebugSendAnimationEvent(vmRegistry, 0, nullptr, playerRef, BSFixedString("blockStop"));
@@ -268,6 +311,9 @@ namespace PapyrusVR
 
 			if (!DualWieldBlockVR::GetConfigOptionFloat("Setting", "HmdToHandVerticalDistanceEnter", &hmdToHandDistanceUpEnter)) return false;
 			if (!DualWieldBlockVR::GetConfigOptionFloat("Setting", "HmdToHandVerticalDistanceExit", &hmdToHandDistanceUpExit)) return false;
+
+			if (!DualWieldBlockVR::GetConfigOptionBool("Setting", "EnableShield", &isShieldEnabled)) return false;
+
 			return true;
 		}
 
@@ -285,6 +331,10 @@ namespace PapyrusVR
 			}
 			else {
 				_WARNING("[WARNING] Failed to read config options. Using defaults instead.");
+			}
+
+			for (int i = 0; i < numPrevIsBlocking; i++) {
+				prevIsBlockings[i] = false;
 			}
 
 			for (int i = 0; i < numPrevSpeeds; i++) {
