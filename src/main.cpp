@@ -3,7 +3,6 @@
 #include "skse64/PluginAPI.h"  // SKSEInterface, PluginInfo
 #include "skse64/GameRTTI.h"
 #include "skse64/GameSettings.h"
-#include "skse64/GameMenus.h"
 
 #include <ShlObj.h>  // CSIDL_MYDOCUMENTS
 
@@ -41,6 +40,14 @@ namespace PapyrusVR
 	float hmdToHandDistanceUpExit = 0.35;
 	bool isShieldEnabled = false;
 
+	// Config parameters for unarmed blocking
+	float maxSpeedUnarmedEnter = 0.02;
+	float maxSpeedUnarmedExit = 0.15;
+	float handForwardHmdRightUnarmedEnter = 0.5;
+	float handForwardHmdRightUnarmedExit = 0.4;
+	float hmdToHandDistanceUpUnarmedEnter = 0.35;
+	float hmdToHandDistanceUpUnarmedExit = 0.35;
+
 	bool isLoaded = false;
 	bool isLeftHanded = false;
 	bool isLastUpdateValid = false;
@@ -70,7 +77,10 @@ namespace PapyrusVR
 
 		bool IsDualWielding(TESForm *mainHandItem, TESForm *offHandItem)
 		{
-			// must have 2 actual items equipped
+			// Unarmed is okay
+			if (!mainHandItem && !offHandItem) return true;
+
+			// If not unarmed, both hands need to have something
 			if (!mainHandItem || !offHandItem) return false;
 
 			// main hand has to be a weapon
@@ -82,7 +92,7 @@ namespace PapyrusVR
 			return true;
 		}
 
-		// True if _the game_ decided to block, not us (i.e. 1 handed exclusive block, 2 handed block, or shield is blocking
+		// True if _the game_ decided to block, not us (i.e. 1 handed exclusive block, 2 handed block, or shield is blocking)
 		bool IsBlockingInternal(Actor *actor)
 		{
 			return (actor->actorState.flags08 >> 8) & 1;
@@ -156,11 +166,58 @@ namespace PapyrusVR
 			return 0;
 		}
 
+		// Returns 2 if we should start blocking, 1 if we should stop blocking, 0 if no effect
+		int GetHandBlockingStatusUnarmed(TrackedDevicePose *hmdPose, TrackedDevicePose *handPose, float *speeds, bool isBlocking)
+		{
+			Quaternion hmdQuat = OpenVRUtils::GetRotation(&(hmdPose->mDeviceToAbsoluteTracking));
+			Vector3 hmdPosition = OpenVRUtils::GetPosition(&(hmdPose->mDeviceToAbsoluteTracking));
+			Matrix34 hmdMatrix = OpenVRUtils::CreateRotationMatrix(&hmdQuat);
+
+			Quaternion handQuat = OpenVRUtils::GetRotation(&(handPose->mDeviceToAbsoluteTracking));
+			Vector3 handPosition = OpenVRUtils::GetPosition(&(handPose->mDeviceToAbsoluteTracking));
+			Matrix34 handMatrix = OpenVRUtils::CreateRotationMatrix(&handQuat);
+
+			Vector3 handForward(handMatrix.m[0][2], handMatrix.m[1][2], handMatrix.m[2][2]); // third column of hand matrix - the direction the sword points in
+			Vector3 hmdUp(hmdMatrix.m[0][1], hmdMatrix.m[1][1], hmdMatrix.m[2][1]); // second column of hmd matrix
+			Vector3 hmdRight(hmdMatrix.m[0][0], hmdMatrix.m[1][0], hmdMatrix.m[2][0]); // first column of hmd matrix
+			float handForwardDotWithHmdRight = MathUtils::VectorDotProduct(handForward, hmdRight);
+
+			Vector3 hmdToHand = handPosition - hmdPosition; // Vector pointing from the hmd to the hand
+			float hmdToHandVerticalDistance = MathUtils::VectorDotProduct(hmdUp, hmdToHand); // Distance of hand away from hmd along hmd up axis
+
+			// Compute max speed over the last few
+			float speed = handPose->vVelocity.lengthSquared();
+			float maxSpeed = speed;
+			for (int i = numPrevSpeeds - 1; i >= 1; i--) {
+				speeds[i] = speeds[i - 1];
+				if (speeds[i] > maxSpeed) maxSpeed = speeds[i];
+			}
+			speeds[0] = speed;
+
+			if (maxSpeed <= maxSpeedUnarmedEnter &&
+				abs(handForwardDotWithHmdRight) >= handForwardHmdRightUnarmedEnter &&
+				abs(hmdToHandVerticalDistance) <= hmdToHandDistanceUpUnarmedEnter) {
+
+				if (!isBlocking) {
+					// Start blocking
+					return 2;
+				}
+			}
+			else if (maxSpeed > maxSpeedUnarmedExit ||
+				abs(handForwardDotWithHmdRight) < handForwardHmdRightUnarmedExit ||
+				abs(hmdToHandVerticalDistance) > hmdToHandDistanceUpUnarmedExit) {
+
+				if (isBlocking) {
+					// Stop blocking
+					return 1;
+				}
+			}
+			return 0;
+		}
+
 		// Called on each update (about 90-100 calls per second)
 		void OnPoseUpdate(float DeltaTime)
 		{
-			bool wasLastUpdateValid = isLastUpdateValid;
-			isLastUpdateValid = false;
 			if (lastBlockStartFrameCount > 0)
 				lastBlockStartFrameCount--;
 			if (lastBlockStopFrameCount > 0)
@@ -168,8 +225,13 @@ namespace PapyrusVR
 
 			if (!isLoaded || !g_thePlayer) return;
 
+			if (IsInMenuMode(vmRegistry, 0)) return;
+
 			PlayerCharacter *pc = *g_thePlayer;
 			if (!pc || !pc->actorState.IsWeaponDrawn()) return;
+
+			bool wasLastUpdateValid = isLastUpdateValid;
+			isLastUpdateValid = false;
 
 			TESForm *mainHandItem = GetMainHandObject(pc);
 			TESForm *offHandItem = GetOffHandObject(pc);
@@ -190,14 +252,22 @@ namespace PapyrusVR
 			// Check if the player is blocking
 			bool isBlocking = GetIsBlockingMode();
 
-			int mainHandBlockStatus = GetHandBlockingStatus(hmdPose, mainHandPose, rightSpeeds, isBlocking);
+			int mainHandBlockStatus = 0;
+			if (!mainHandItem) { // Unarmed
+				mainHandBlockStatus = GetHandBlockingStatusUnarmed(hmdPose, mainHandPose, rightSpeeds, isBlocking);
+			}
+			else { // Weapon
+				mainHandBlockStatus = GetHandBlockingStatus(hmdPose, mainHandPose, rightSpeeds, isBlocking);
+			}
 
 			int offHandBlockStatus = 0;
-			if (offHandItem->IsWeapon()) {
+			if (!offHandItem) { // Unarmed
+				offHandBlockStatus = GetHandBlockingStatusUnarmed(hmdPose, offHandPose, leftSpeeds, isBlocking);
+			}
+			else if(offHandItem->IsWeapon()) {
 				offHandBlockStatus = GetHandBlockingStatus(hmdPose, offHandPose, leftSpeeds, isBlocking);
 			}
-			else if (offHandItem->formType == kFormType_Armor) {
-				// Offhand is a shield
+			else if (offHandItem->formType == kFormType_Armor) { // Offhand is a shield
 				if (IsBlockingInternal(pc)) {
 					offHandBlockStatus = 0;
 				}
@@ -208,7 +278,7 @@ namespace PapyrusVR
 				}
 			}
 			else {
-				offHandBlockStatus = 1; // Offhand not being a weapon/shield means it should say to stop blocking
+				offHandBlockStatus = 1; // Offhand not being a weapon/shield (so spell) means it should say to stop blocking
 			}
 
 			if (mainHandBlockStatus == 2 || offHandBlockStatus == 2) { // Either hand is in blocking position
@@ -219,7 +289,7 @@ namespace PapyrusVR
 					lastBlockStartFrameCount = blockCooldown;
 				}
 			}
-			else if (mainHandBlockStatus == 1 && offHandBlockStatus == 1) { // Either both hands are not blocking, or just main hand and offhand is not a weapon
+			else if (mainHandBlockStatus == 1 && offHandBlockStatus == 1) { // Both hands are not blocking
 				if (lastBlockStopFrameCount <= 0) { // Do not try to block more than once every n updates
 					// Stop blocking
 					DebugSendAnimationEvent(vmRegistry, 0, nullptr, playerRef, BSFixedString("blockStop"));
@@ -300,19 +370,30 @@ namespace PapyrusVR
 
 		bool ReadConfigOptions()
 		{
-			if (!DualWieldBlockVR::GetConfigOptionFloat("Setting", "MaxSpeedEnter", &maxSpeedEnter)) return false;
-			if (!DualWieldBlockVR::GetConfigOptionFloat("Setting", "MaxSpeedExit", &maxSpeedExit)) return false;
+			// Dual wield settings
+			if (!DualWieldBlockVR::GetConfigOptionFloat("DualWield", "MaxSpeedEnter", &maxSpeedEnter)) return false;
+			if (!DualWieldBlockVR::GetConfigOptionFloat("DualWield", "MaxSpeedExit", &maxSpeedExit)) return false;
 
-			if (!DualWieldBlockVR::GetConfigOptionFloat("Setting", "HandForwardDotWithHmdDownEnter", &handForwardHmdUpEnter)) return false;
-			if (!DualWieldBlockVR::GetConfigOptionFloat("Setting", "HandForwardDotWithHmdDownExit", &handForwardHmdUpExit)) return false;
+			if (!DualWieldBlockVR::GetConfigOptionFloat("DualWield", "HandForwardDotWithHmdDownEnter", &handForwardHmdUpEnter)) return false;
+			if (!DualWieldBlockVR::GetConfigOptionFloat("DualWield", "HandForwardDotWithHmdDownExit", &handForwardHmdUpExit)) return false;
 
-			if (!DualWieldBlockVR::GetConfigOptionFloat("Setting", "HandForwardDotWithHmdForwardEnter", &handForwardHmdForwardEnter)) return false;
-			if (!DualWieldBlockVR::GetConfigOptionFloat("Setting", "HandForwardDotWithHmdForwardExit", &handForwardHmdForwardExit)) return false;
+			if (!DualWieldBlockVR::GetConfigOptionFloat("DualWield", "HandForwardDotWithHmdForwardEnter", &handForwardHmdForwardEnter)) return false;
+			if (!DualWieldBlockVR::GetConfigOptionFloat("DualWield", "HandForwardDotWithHmdForwardExit", &handForwardHmdForwardExit)) return false;
 
-			if (!DualWieldBlockVR::GetConfigOptionFloat("Setting", "HmdToHandVerticalDistanceEnter", &hmdToHandDistanceUpEnter)) return false;
-			if (!DualWieldBlockVR::GetConfigOptionFloat("Setting", "HmdToHandVerticalDistanceExit", &hmdToHandDistanceUpExit)) return false;
+			if (!DualWieldBlockVR::GetConfigOptionFloat("DualWield", "HmdToHandVerticalDistanceEnter", &hmdToHandDistanceUpEnter)) return false;
+			if (!DualWieldBlockVR::GetConfigOptionFloat("DualWield", "HmdToHandVerticalDistanceExit", &hmdToHandDistanceUpExit)) return false;
 
-			if (!DualWieldBlockVR::GetConfigOptionBool("Setting", "EnableShield", &isShieldEnabled)) return false;
+			if (!DualWieldBlockVR::GetConfigOptionBool("DualWield", "EnableShield", &isShieldEnabled)) return false;
+
+			// Unarmed settings
+			if (!DualWieldBlockVR::GetConfigOptionFloat("Unarmed", "MaxSpeedEnter", &maxSpeedUnarmedEnter)) return false;
+			if (!DualWieldBlockVR::GetConfigOptionFloat("Unarmed", "MaxSpeedExit", &maxSpeedUnarmedExit)) return false;
+
+			if (!DualWieldBlockVR::GetConfigOptionFloat("Unarmed", "HandForwardDotWithHmdRightEnter", &handForwardHmdRightUnarmedEnter)) return false;
+			if (!DualWieldBlockVR::GetConfigOptionFloat("Unarmed", "HandForwardDotWithHmdRightExit", &handForwardHmdRightUnarmedExit)) return false;
+
+			if (!DualWieldBlockVR::GetConfigOptionFloat("Unarmed", "HmdToHandVerticalDistanceEnter", &hmdToHandDistanceUpUnarmedEnter)) return false;
+			if (!DualWieldBlockVR::GetConfigOptionFloat("Unarmed", "HmdToHandVerticalDistanceExit", &hmdToHandDistanceUpUnarmedExit)) return false;
 
 			return true;
 		}

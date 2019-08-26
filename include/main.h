@@ -13,3 +13,6 @@ RelocAddr<_GetAnimationVariableInt> GetAnimationVariableInt(0x009CE950);
 
 typedef void(*_DebugSendAnimationEvent)(VMClassRegistry* registry, UInt32 stackId, void* unk1, TESObjectREFR* objectRefr, const BSFixedString &animEvent);
 RelocAddr<_DebugSendAnimationEvent> DebugSendAnimationEvent(0x009A7F40);
+
+typedef bool(*_IsInMenuMode)(VMClassRegistry* registry, UInt32 stackId);
+RelocAddr<_IsInMenuMode> IsInMenuMode(0x009F32A0);
