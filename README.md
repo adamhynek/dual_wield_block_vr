@@ -1,8 +1,8 @@
 # Dual Wield Block For Skyrim VR
 
-This is a Skyrim VR mod / SKSE VR plugin which combine to let the player block while dual wielding.
+This is a Skyrim VR mod / SKSE VR plugin which lets the player block while dual wielding.
 
-This is done by basically re-checking the conditions the game normally checks to block without dual wielding.
+This is done by basically re-checking the conditions (head / hand poses) the game normally checks to block without dual wielding.
 
 [Get the mod here](https://www.nexusmods.com/skyrimspecialedition/mods/28456)
 
