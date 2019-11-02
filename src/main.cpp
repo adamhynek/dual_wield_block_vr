@@ -55,7 +55,7 @@ namespace PapyrusVR
 	const int numPrevIsBlocking = 5; // Should be an odd number
 	bool prevIsBlockings[numPrevIsBlocking];  // previous n IsBlocking animation values
 
-	const int numPrevSpeeds = 5; // length of previous kept speeds
+	const int numPrevSpeeds = 2; // length of previous kept speeds
 	float leftSpeeds[numPrevSpeeds]; // previous n speeds
 	float rightSpeeds[numPrevSpeeds]; // previous n speeds
 
@@ -86,8 +86,9 @@ namespace PapyrusVR
 			// main hand has to be a weapon
 			if (!mainHandItem->IsWeapon()) return false;
 
-			// offhand can be weapon or spell, or shield if enabled
-			if (!(offHandItem->IsWeapon() || offHandItem->formType == kFormType_Spell || (isShieldEnabled && offHandItem->formType == kFormType_Armor))) return false;
+			// offhand can be weapon or spell or torch, or shield if enabled
+			if (!(offHandItem->IsWeapon() || offHandItem->formType == kFormType_Spell || offHandItem->formType == kFormType_Light
+				|| (isShieldEnabled && offHandItem->formType == kFormType_Armor))) return false;
 
 			return true;
 		}
@@ -264,7 +265,7 @@ namespace PapyrusVR
 			if (!offHandItem) { // Unarmed
 				offHandBlockStatus = GetHandBlockingStatusUnarmed(hmdPose, offHandPose, leftSpeeds, isBlocking);
 			}
-			else if(offHandItem->IsWeapon()) {
+			else if (offHandItem->IsWeapon() || offHandItem->formType == kFormType_Light) { // Weapon / torch are the same case
 				offHandBlockStatus = GetHandBlockingStatus(hmdPose, offHandPose, leftSpeeds, isBlocking);
 			}
 			else if (offHandItem->formType == kFormType_Armor) { // Offhand is a shield
