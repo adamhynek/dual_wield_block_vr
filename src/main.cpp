@@ -248,7 +248,9 @@ namespace PapyrusVR
 			TrackedDevicePose *hmdPose = g_papyrusvrManager->GetHMDPose();
 			TrackedDevicePose *mainHandPose = isLeftHanded ? g_papyrusvrManager->GetLeftHandPose() : g_papyrusvrManager->GetRightHandPose();
 			TrackedDevicePose *offHandPose = isLeftHanded ? g_papyrusvrManager->GetRightHandPose() : g_papyrusvrManager->GetLeftHandPose();
-			if (!hmdPose || !hmdPose->bPoseIsValid || !mainHandPose || !mainHandPose->bPoseIsValid || !offHandPose || !offHandPose->bPoseIsValid) return;
+			if (!hmdPose || !hmdPose->bDeviceIsConnected || hmdPose->eTrackingResult != ETrackingResult::TrackingResult_Running_OK || !hmdPose->bPoseIsValid) return;
+			if (!mainHandPose || !mainHandPose->bDeviceIsConnected || mainHandPose->eTrackingResult != ETrackingResult::TrackingResult_Running_OK || !mainHandPose->bPoseIsValid) return;
+			if (!offHandPose || !offHandPose->bDeviceIsConnected || offHandPose->eTrackingResult != ETrackingResult::TrackingResult_Running_OK || !offHandPose->bPoseIsValid) return;
 
 			// Check if the player is blocking
 			bool isBlocking = GetIsBlockingMode();
