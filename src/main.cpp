@@ -25,15 +25,16 @@ namespace PapyrusVR
 
 	PapyrusVRAPI *g_papyrusvr;
 	PapyrusVR::VRManagerAPI *g_papyrusvrManager;
+	OpenVRHookManagerAPI *g_openvrHook;
 
 	TESObjectREFR *playerRef;
 	VMClassRegistry *vmRegistry;
 
 	// Config parameters for blocking conditions
-	float maxSpeedEnter = 0.02;
-	float maxSpeedExit = 0.06;
-	float handForwardHmdUpEnter = -0.5;
-	float handForwardHmdUpExit = -0.5;
+	float maxSpeedEnter = 2;
+	float maxSpeedExit = 3;
+	float handForwardHmdUpEnter = -0.6;
+	float handForwardHmdUpExit = -0.6;
 	float handForwardHmdForwardEnter = 0.4;
 	float handForwardHmdForwardExit = 0.6;
 	float hmdToHandDistanceUpEnter = 0.35;
@@ -41,8 +42,8 @@ namespace PapyrusVR
 	bool isShieldEnabled = false;
 
 	// Config parameters for unarmed blocking
-	float maxSpeedUnarmedEnter = 0.02;
-	float maxSpeedUnarmedExit = 0.15;
+	float maxSpeedUnarmedEnter = 1;
+	float maxSpeedUnarmedExit = 1.5;
 	float handForwardHmdRightUnarmedEnter = 0.5;
 	float handForwardHmdRightUnarmedExit = 0.4;
 	float hmdToHandDistanceUpUnarmedEnter = 0.35;
@@ -216,6 +217,26 @@ namespace PapyrusVR
 			return 0;
 		}
 
+		bool FillDevicePoses(TrackedDevicePose *&hmdPose, TrackedDevicePose *&mainHandPose, TrackedDevicePose *&offHandPose)
+		{
+			vr::IVRSystem *vrSystem = g_openvrHook->GetVRSystem();
+			if (!vrSystem) return false;
+
+			if (!vrSystem->IsTrackedDeviceConnected(vr::k_unTrackedDeviceIndex_Hmd)) return false;
+			if (!vrSystem->IsTrackedDeviceConnected(vrSystem->GetTrackedDeviceIndexForControllerRole(vr::ETrackedControllerRole::TrackedControllerRole_RightHand))) return false;
+			if (!vrSystem->IsTrackedDeviceConnected(vrSystem->GetTrackedDeviceIndexForControllerRole(vr::ETrackedControllerRole::TrackedControllerRole_LeftHand))) return false;
+
+			hmdPose = g_papyrusvrManager->GetHMDPose();
+			mainHandPose = isLeftHanded ? g_papyrusvrManager->GetLeftHandPose() : g_papyrusvrManager->GetRightHandPose();
+			offHandPose = isLeftHanded ? g_papyrusvrManager->GetRightHandPose() : g_papyrusvrManager->GetLeftHandPose();
+			if (!hmdPose || !mainHandPose || !offHandPose ) return false;
+			if (!hmdPose->bDeviceIsConnected || hmdPose->eTrackingResult != ETrackingResult::TrackingResult_Running_OK || !hmdPose->bPoseIsValid) return false;
+			if (!mainHandPose->bDeviceIsConnected || mainHandPose->eTrackingResult != ETrackingResult::TrackingResult_Running_OK || !mainHandPose->bPoseIsValid) return false;
+			if (!offHandPose->bDeviceIsConnected || offHandPose->eTrackingResult != ETrackingResult::TrackingResult_Running_OK || !offHandPose->bPoseIsValid) return false;
+
+			return true;
+		}
+
 		// Called on each update (about 90-100 calls per second)
 		void OnPoseUpdate(float DeltaTime)
 		{
@@ -245,12 +266,8 @@ namespace PapyrusVR
 				return;
 			}
 
-			TrackedDevicePose *hmdPose = g_papyrusvrManager->GetHMDPose();
-			TrackedDevicePose *mainHandPose = isLeftHanded ? g_papyrusvrManager->GetLeftHandPose() : g_papyrusvrManager->GetRightHandPose();
-			TrackedDevicePose *offHandPose = isLeftHanded ? g_papyrusvrManager->GetRightHandPose() : g_papyrusvrManager->GetLeftHandPose();
-			if (!hmdPose || !hmdPose->bDeviceIsConnected || hmdPose->eTrackingResult != ETrackingResult::TrackingResult_Running_OK || !hmdPose->bPoseIsValid) return;
-			if (!mainHandPose || !mainHandPose->bDeviceIsConnected || mainHandPose->eTrackingResult != ETrackingResult::TrackingResult_Running_OK || !mainHandPose->bPoseIsValid) return;
-			if (!offHandPose || !offHandPose->bDeviceIsConnected || offHandPose->eTrackingResult != ETrackingResult::TrackingResult_Running_OK || !offHandPose->bPoseIsValid) return;
+			TrackedDevicePose *hmdPose, *mainHandPose, *offHandPose;
+			if (!FillDevicePoses(hmdPose, mainHandPose, offHandPose)) return;
 
 			// Check if the player is blocking
 			bool isBlocking = GetIsBlockingMode();
@@ -311,13 +328,17 @@ namespace PapyrusVR
 					_MESSAGE("PapyrusVR Init Message recived with valid data, registering for pose update callback");
 					g_papyrusvr = (PapyrusVRAPI*)msg->data;
 					g_papyrusvrManager = g_papyrusvr->GetVRManager();
-					if (g_papyrusvrManager) {
-						// Registers for PoseUpdates
-						g_papyrusvrManager->RegisterVRUpdateListener(OnPoseUpdate);
-					}
-					else {
+					g_openvrHook = g_papyrusvr->GetOpenVRHook();
+					if (!g_papyrusvrManager) {
 						_MESSAGE("Could not get PapyrusVRManager");
+						return;
 					}
+					if (!g_openvrHook) {
+						_MESSAGE("Could not get OpenVRHook");
+						return;
+					}
+					// Registers for PoseUpdates
+					g_papyrusvrManager->RegisterVRUpdateListener(OnPoseUpdate);
 				}
 			}
 		}
