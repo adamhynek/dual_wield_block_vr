@@ -76,6 +76,18 @@ namespace PapyrusVR
 			return actor->GetEquippedObject(true);
 		}
 
+		bool IsTwoHanded(const TESObjectWEAP *weap)
+		{
+			switch (weap->gameData.type) {
+			case TESObjectWEAP::GameData::kType_CrossBow:
+			case TESObjectWEAP::GameData::kType_TwoHandAxe:
+			case TESObjectWEAP::GameData::kType_TwoHandSword:
+				return true;
+			default:
+				return false;
+			}
+		}
+
 		bool IsDualWielding(TESForm *mainHandItem, TESForm *offHandItem)
 		{
 			// Unarmed is okay
@@ -84,8 +96,9 @@ namespace PapyrusVR
 			// If not unarmed, both hands need to have something
 			if (!mainHandItem || !offHandItem) return false;
 
-			// main hand has to be a weapon
-			if (!mainHandItem->IsWeapon()) return false;
+			// main hand has to be a weapon, and not two-handed
+			TESObjectWEAP *mainWeapon = DYNAMIC_CAST(mainHandItem, TESForm, TESObjectWEAP);
+			if (!mainWeapon || IsTwoHanded(mainWeapon)) return false;
 
 			// offhand can be weapon or spell or torch, or shield if enabled
 			if (!(offHandItem->IsWeapon() || offHandItem->formType == kFormType_Spell || offHandItem->formType == kFormType_Light
