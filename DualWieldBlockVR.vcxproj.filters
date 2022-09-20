@@ -2,9 +2,6 @@
 <Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup>
     <None Include="exports.def" />
-    <None Include="src\api\SkyrimVRToolsAPI.vcxproj">
-      <Filter>src\api</Filter>
-    </None>
   </ItemGroup>
   <ItemGroup>
     <Filter Include="src">
@@ -13,24 +10,12 @@
     <Filter Include="include">
       <UniqueIdentifier>{aee06ac9-1bc5-42ef-858c-7657bb1ee832}</UniqueIdentifier>
     </Filter>
-    <Filter Include="src\api">
-      <UniqueIdentifier>{536d0179-9057-4edb-82fc-1c56ff0dcfb5}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="src\api\utils">
-      <UniqueIdentifier>{4c70374a-5598-4d53-bcf0-c2d92f705603}</UniqueIdentifier>
-    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="src\main.cpp">
       <Filter>src</Filter>
     </ClCompile>
-    <ClCompile Include="src\api\PapyrusVRTypes.cpp">
-      <Filter>src\api</Filter>
-    </ClCompile>
-    <ClCompile Include="src\api\utils\OpenVRUtils.cpp">
-      <Filter>src\api\utils</Filter>
-    </ClCompile>
-    <ClCompile Include="src\MathUtils.cpp">
+    <ClCompile Include="src\math_utils.cpp">
       <Filter>src</Filter>
     </ClCompile>
     <ClCompile Include="src\config.cpp">
@@ -42,28 +27,7 @@
       <Filter>include</Filter>
     </ClInclude>
     <ClInclude Include="resource.h" />
-    <ClInclude Include="src\api\OpenVRTypes.h">
-      <Filter>src\api</Filter>
-    </ClInclude>
-    <ClInclude Include="src\api\PapyrusVRAPI.h">
-      <Filter>src\api</Filter>
-    </ClInclude>
-    <ClInclude Include="src\api\PapyrusVRTypes.h">
-      <Filter>src\api</Filter>
-    </ClInclude>
-    <ClInclude Include="src\api\VRHookAPI.h">
-      <Filter>src\api</Filter>
-    </ClInclude>
-    <ClInclude Include="src\api\VRManagerAPI.h">
-      <Filter>src\api</Filter>
-    </ClInclude>
-    <ClInclude Include="src\api\utils\OpenVRUtils.h">
-      <Filter>src\api\utils</Filter>
-    </ClInclude>
-    <ClInclude Include="src\api\openvr.h">
-      <Filter>src\api</Filter>
-    </ClInclude>
-    <ClInclude Include="src\MathUtils.h">
+    <ClInclude Include="src\math_utils.h">
       <Filter>src</Filter>
     </ClInclude>
     <ClInclude Include="include\main.h">

@@ -5,14 +5,18 @@
 #include "skse64/GameReferences.h"
 
 
-typedef bool(*_GetAnimationVariableBool)(VMClassRegistry* registry, UInt32 stackId, TESObjectREFR* obj, const BSFixedString &asVariableName);
-RelocAddr<_GetAnimationVariableBool> GetAnimationVariableBool(0x009CE880);
-
-typedef int(*_GetAnimationVariableInt)(VMClassRegistry* registry, UInt32 stackId, TESObjectREFR* obj, const BSFixedString &asVariableName);
-RelocAddr<_GetAnimationVariableInt> GetAnimationVariableInt(0x009CE950);
-
-typedef void(*_DebugSendAnimationEvent)(VMClassRegistry* registry, UInt32 stackId, void* unk1, TESObjectREFR* objectRefr, const BSFixedString &animEvent);
-RelocAddr<_DebugSendAnimationEvent> DebugSendAnimationEvent(0x009A7F40);
-
 typedef bool(*_IsInMenuMode)(VMClassRegistry* registry, UInt32 stackId);
 RelocAddr<_IsInMenuMode> IsInMenuMode(0x009F32A0);
+
+typedef bool(*_IAnimationGraphManagerHolder_NotifyAnimationGraph)(IAnimationGraphManagerHolder *_this, const BSFixedString &a_eventName); // 01
+typedef bool(*_IAnimationGraphManagerHolder_GetAnimationVariableInt)(IAnimationGraphManagerHolder *_this, const BSFixedString &a_variableName, SInt32 &a_out); // 11
+typedef bool(*_IAnimationGraphManagerHolder_GetAnimationVariableBool)(IAnimationGraphManagerHolder *_this, const BSFixedString &a_variableName, bool &a_out); // 12
+
+
+inline UInt64 *get_vtbl(void *object) { return *((UInt64 **)object); }
+
+template<typename T>
+inline T get_vfunc(void *object, UInt64 index) {
+	UInt64 *vtbl = get_vtbl(object);
+	return (T)(vtbl[index]);
+}
