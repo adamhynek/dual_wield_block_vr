@@ -5,6 +5,7 @@
 #include "skse64/GameSettings.h"
 #include "skse64/GameInput.h"
 #include "skse64/GameVR.h"
+#include "skse64_common/SafeWrite.h"
 
 #include <ShlObj.h>  // CSIDL_MYDOCUMENTS
 
@@ -257,24 +258,30 @@ void StopBlocking(Actor *actor)
 
 bool WaitPosesCB(vr_src::TrackedDevicePose_t *pRenderPoseArray, uint32_t unRenderPoseArrayCount, vr_src::TrackedDevicePose_t *pGamePoseArray, uint32_t unGamePoseArrayCount)
 {
+	UpdateHandSpeeds(pGamePoseArray, unGamePoseArrayCount);
+	return true;
+}
+
+void Update()
+{
 	if (lastBlockStartFrameCount > 0)
 		lastBlockStartFrameCount--;
 	if (lastBlockStopFrameCount > 0)
 		lastBlockStopFrameCount--;
 
 	PlayerCharacter *player = *g_thePlayer;
-	if (!player || !player->GetNiNode() || !player->actorState.IsWeaponDrawn()) return true;
+	if (!player || !player->GetNiNode() || !player->actorState.IsWeaponDrawn()) return;
 
-	if (IsInMenuMode(nullptr, 0)) return true;
+	if (IsInMenuMode(nullptr, 0)) return;
 
 	NiPointer<NiAVObject> hmdNode = player->unk3F0[PlayerCharacter::Node::kNode_HmdNode];
-	if (!hmdNode) return true;
+	if (!hmdNode) return;
 
 	NiPointer<NiAVObject> rightWand = player->unk3F0[PlayerCharacter::Node::kNode_RightWandNode];
-	if (!rightWand) return true;
+	if (!rightWand) return;
 
 	NiPointer<NiAVObject> leftWand = player->unk3F0[PlayerCharacter::Node::kNode_LeftWandNode];
-	if (!leftWand) return true;
+	if (!leftWand) return;
 
 	bool wasLastUpdateValid = isLastUpdateValid;
 	isLastUpdateValid = false;
@@ -286,10 +293,8 @@ bool WaitPosesCB(vr_src::TrackedDevicePose_t *pRenderPoseArray, uint32_t unRende
 		if (wasLastUpdateValid) {
 			StopBlocking(player);
 		}
-		return true;
+		return;
 	}
-
-	UpdateHandSpeeds(pGamePoseArray, unGamePoseArrayCount);
 
 	// Check if the player is blocking
 	bool isBlocking = GetIsBlockingMode();
@@ -345,8 +350,6 @@ bool WaitPosesCB(vr_src::TrackedDevicePose_t *pRenderPoseArray, uint32_t unRende
 		}
 	}
 	isLastUpdateValid = true;
-
-	return true;
 }
 
 
@@ -414,6 +417,18 @@ bool ReadConfigOptions()
 }
 
 
+typedef void (*_TESObjectREFR_UpdateRefLight)(TESObjectREFR *_this);
+_TESObjectREFR_UpdateRefLight g_original_PlayerCharacter_UpdateRefLight = nullptr;
+static RelocPtr<_TESObjectREFR_UpdateRefLight> PlayerCharacter_UpdateRefLight_vtbl(0x16E24D8); // 0x16E2230 + 0x55 * 8
+void PlayerCharacter_UpdateRefLight_Hook(PlayerCharacter *_this)
+{
+	// This hook is a chainable vtable hook near the very end of the PlayerCharacter update, which runs after higgs/vrik main frame updates
+
+	Update();
+
+	g_original_PlayerCharacter_UpdateRefLight(_this);
+}
+
 extern "C" {
 	bool SKSEPlugin_Query(const SKSEInterface* skse, PluginInfo* info)
 	{
@@ -468,7 +483,8 @@ extern "C" {
 			prevIsBlockings[i] = false;
 		}
 
-		// wait for PapyrusVR init (during PostPostLoad SKSE Message)
+		g_original_PlayerCharacter_UpdateRefLight = *PlayerCharacter_UpdateRefLight_vtbl;
+		SafeWrite64(PlayerCharacter_UpdateRefLight_vtbl.GetUIntPtr(), uintptr_t(PlayerCharacter_UpdateRefLight_Hook));
 
 		return true;
 	}
